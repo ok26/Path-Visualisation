@@ -70,7 +70,8 @@ def recursive_division(grid, maze_ratio=(-1,1)):
     return output_grid
 
 
-def fix_rec_div_bug(maze):
+def fix_maze_bug(maze):
+    print("ok")
     for y in range(1,len(maze)-1):
         for x in range(1,len(maze[0])-1):
             check = [x for x in maze[y,x-1:x+2] if x == 1] + [x for x in maze[y-1:y+2,x] if x == 1]

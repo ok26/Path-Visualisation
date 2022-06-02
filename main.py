@@ -1,10 +1,9 @@
 from time import sleep
 import tkinter as tk
 from math import floor, ceil
-from tokenize import String
 import numpy as np
-from tkinter import messagebox, Label, StringVar
-from maze_gen import recursive_division, fix_rec_div_bug
+from tkinter import messagebox, IntVar
+from maze_gen import recursive_division, fix_maze_bug
 from path_algoritms import dijkstras_algoritm
 
 
@@ -21,6 +20,9 @@ class Grid():
         self.filled_squares = {}
         self.canvas_squares = (int((canvas_height-2*grid_ind)/25),int((canvas_width-2*grid_ind)/25))
         self.np_grid = np.zeros(self.canvas_squares)
+        self.current_path_algoritm = IntVar()
+        self.current_maze_algoritm = IntVar()
+
         self.canvas = tk.Canvas(root, height=canvas_height, width=canvas_width, bg='white')
         self.canvas.bind("<Configure>", self.create_grid)
         self.canvas.bind("<Button>", self.check_mouse_type)
@@ -107,7 +109,8 @@ class Grid():
 
                 self.current_color += 1
         else:
-            self.current_color += 1
+            if not (len(np.where( self.np_grid == 2)[0]) == 0 and self.current_color == 2):
+                self.current_color += 1
             if self.current_color > 3:
                 self.current_color = 1
         
@@ -130,18 +133,19 @@ class Grid():
             self.np_grid[np.where(self.np_grid != 0)] = 0
             self.filled_squares = {}
 
-        self.update_after_event("Grid_Cleared")
+        self.update_after_event("Grid Cleared")
 
 
-    def display_shortest_path(self):
+    def visualize_path_algoritm(self):
         if len(np.where( self.np_grid == 3 )[0]) == 0:
             messagebox.showwarning("Missing", "Need a Start and Stop Square to Find Path")
 
         else:
             start = str(np.where(self.np_grid==2)[0][0])+","+str(np.where(self.np_grid==2)[1][0])
             end = str(np.where(self.np_grid==3)[0][0])+","+str(np.where(self.np_grid==3)[1][0])
+            
+            tentatives, path = top_menu.radio_functions["Path Finding Algoritms"][self.current_path_algoritm.get()](self.np_grid, start, end)
 
-            tentatives, path = dijkstras_algoritm(self.np_grid, start, end)
             smallest_tent = 0
             self.current_color = 5
             while True:
@@ -172,7 +176,7 @@ class Grid():
     
             self.current_color = 1
 
-        self.update_after_event("Path_Shown")
+        self.update_after_event("Path Shown")
 
 
     def remove_found_path(self):
@@ -182,18 +186,19 @@ class Grid():
             self.np_grid[SquareY, SquareX] = 0
             del self.filled_squares[str(SquareX)+","+str(SquareY)]
 
-        self.update_after_event("Path_Removed")
+        self.update_after_event("Path Removed")
 
 
     def display_maze(self):
         if len(np.where(self.np_grid==0)[0]) != len(self.np_grid[0]) * len(self.np_grid):
             self.clear_grid()
-           
-        maze = recursive_division(np.zeros(self.canvas_squares))
-        maze = fix_rec_div_bug(maze)
+
+        maze = top_menu.radio_functions["Random Maze Algoritms"][self.current_maze_algoritm.get()](np.zeros(self.canvas_squares))
+        maze = fix_maze_bug(maze)
         self.current_color = 1
 
         squares = np.where(maze==1)
+        print(squares)
         largest_y = None
         for y,x in zip(squares[0],squares[1]):
             if largest_y == None or y > largest_y:
@@ -210,29 +215,42 @@ class Grid():
 
         elif event == "Remove0":
             self.canvas.config(cursor="arrow")
+            top_menu.update_menu(event)
         
         elif event == "Remove1":
             self.canvas.config(cursor="tcross")
+            top_menu.update_menu(event)
 
-        elif event == "Clear_grid":
+        elif event == "Clear grid":
             self.removing = False
             root.config(cursor="arrow")
+            top_menu.update_menu(event)
+
+        elif event == "Path Shown":
+            top_menu.update_menu(event)
+
+        elif event == "Path Removed":
             top_menu.update_menu(event)
 
 
              
 class Menu_bar():
 
-    def __init__(self, buttons=None, cascades=None, cascade_buttons=None):
+    def __init__(self, buttons=None, cascades=None, cascade_buttons=None, cascade_radios=None):
         self.menu = tk.Menu(root, tearoff=0)
         self.cascades = {}
+        self.radio_functions = {}
         if buttons:
             self.add_buttons(buttons)
         if cascades:
             for cascade in cascades:
                 self.make_cascade(cascade)
-                for name, command in cascade_buttons[cascade]:
-                    self.add_to_cascade(cascade, name, command)
+                if cascade_buttons:
+                    for name, attribute in cascade_buttons[cascade]:
+                        self.add_to_cascade(cascade, name, attribute, "button")
+                elif cascade_radios:
+                    for name, attribute in cascade_radios[cascade]:
+                        self.add_to_cascade(cascade, name, attribute, "radio")
 
 
     def add_buttons(self, buttons):
@@ -243,44 +261,57 @@ class Menu_bar():
         self.cascades[label] = tk.Menu(self.menu, tearoff=0)
         self.menu.add_cascade(menu=self.cascades[label], label=label)
 
-    def add_to_cascade(self, cascade_label, label, command):
-        self.cascades[cascade_label].add_command(label=label, command=command)
+    def add_to_cascade(self, cascade_label, label, attribute, type):
+        if type == "button":
+            self.cascades[cascade_label].add_command(label=label, command=attribute)
+        elif type == "radio":
+            if cascade_label not in self.radio_functions:
+                self.radio_functions[cascade_label] = []
+            self.cascades[cascade_label].add_radiobutton(label=label, variable=attribute[0], value=len(self.radio_functions[cascade_label]))
+            self.radio_functions[cascade_label].append(attribute[1])
+          
 
     def update_menu(self, event):
-        pass
+        if event == "StartStop":
+            self.menu.entryconfig(4, label="Visualize Pathfinding!")         #Will later have "Visualize" button and not run visualisatioon when algoritm is chosen
 
+        elif event == "Remove0":
+            self.menu.entryconfig(1, label="Start Erasing Squares") 
+            
+        elif event == "Remove1":
+            self.menu.entryconfig(1, label="Stop Erasing Squares") 
+            
+        elif event == "Clear grid":
+            self.menu.entryconfig(1, label="Start Removing Squares") 
+            self.menu.entryconfig(4, label="Visualize Pathfinding!")   
 
-#start_stop: self.menu.entryconfig(3, label="Find Path", command=self.display_shortest_path)
+        elif event == "Path Shown":
+            self.menu.entryconfig(4, command=grid.remove_found_path)
+            self.menu.entryconfig(4, label="Reset Found Path")
 
-#Start Removing: Obvious
+        elif event == "Path Removed":
+            self.menu.entryconfig(4, command=grid.visualize_path_algoritm)
+            self.menu.entryconfig(4, label="Visualize Pathfinding!") 
+            
 
-#Clear Grid self.removing = False
-            #self.menu.entryconfig(1, label="Remove Squares")
-            #root.config(cursor="arrow")
-            #self.menu.entryconfig(3, label="Find Path", command=self.display_shortest_path)
-
-#Find Path self.menu.entryconfig(3, label="Reset Path", command=self.remove_found_path)
-
-#Remove found path: self.menu.entryconfig(3, label="Find Path", command=self.display_shortest_path) 
-
-
-
-
+            
 root = tk.Tk()
 
 grid = Grid(25, 1200, 800, 50, ["black", "blue", "red", "green", "gray"])
 grid.canvas.pack(side="bottom")
 
 top_menu = Menu_bar(buttons = [("Place Start and Stop", grid.chose_start_stop),
-                               ("Start Removing Squares", grid.remove_squares),
-                               ("Clear Grid", grid.clear_grid)], 
+                               ("Visualize Pathfinding!", grid.visualize_path_algoritm)
+                               ("Start Erasing Squares", grid.remove_squares),
+                               ("Clear Grid", grid.clear_grid),
+                               ("Generate Maze!", grid.display_maze)], 
 
                     cascades = ["Path Finding Algoritms", "Random Maze Algoritms"],
-                    cascade_buttons={"Path Finding Algoritms": [("Dijkstrs Algoritm", grid.display_shortest_path),
-                                                                ("To Be Created", grid.clear_grid)],
+                    cascade_radios= {"Path Finding Algoritms": [("Dijkstrs Algoritm", (grid.current_path_algoritm, dijkstras_algoritm)),
+                                                                ("To Be Created", (grid.current_path_algoritm, grid.clear_grid))],
 
-                                      "Random Maze Algoritms": [("Recursive Division", grid.display_maze),
-                                                                ("To Be Created", grid.clear_grid)]})
+                                      "Random Maze Algoritms": [("Recursive Division", (grid.current_maze_algoritm, recursive_division)),
+                                                                ("To Be Created", (grid.current_maze_algoritm, grid.clear_grid))]})
 
 
 root.config(menu=top_menu.menu)
