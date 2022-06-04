@@ -1,6 +1,6 @@
 import numpy as np 
 
-def dijkstras_algoritm(grid, start, end):
+def dijkstras_algorithm(grid, start, end):
     tentatives = {}
     unvisited = {}
 
@@ -68,3 +68,9 @@ def dijkstras_algoritm(grid, start, end):
         path = path[1:-1][::-1]
 
         return tentatives, path
+
+
+
+def A_star_algorihtm(grid, start, end):
+    pass
+#Firstly make usre able to change speed and size

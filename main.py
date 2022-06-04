@@ -1,16 +1,16 @@
 from time import sleep
 import tkinter as tk
 from math import floor, ceil
+from tkinter import messagebox   #Because visualstudio error even when star import
 import numpy as np
-from tkinter import messagebox, IntVar
+from tkinter import *
 from maze_gen import recursive_division, fix_maze_bug
-from path_algoritms import dijkstras_algoritm
+from path_algorithms import dijkstras_algorithm
 
 
 class Grid():
 
-    def __init__(self, square_side, canvas_width, canvas_height, grid_ind, colors):
-        self.square_side = square_side
+    def __init__(self, canvas_width, canvas_height, grid_ind, colors):
         self.canvas_width = canvas_width
         self.canvas_height = canvas_height
         self.grid_ind = grid_ind
@@ -18,13 +18,16 @@ class Grid():
         self.current_color = 1
         self.removing = False
         self.filled_squares = {}
-        self.canvas_squares = (int((canvas_height-2*grid_ind)/25),int((canvas_width-2*grid_ind)/25))
-        self.np_grid = np.zeros(self.canvas_squares)
-        self.current_path_algoritm = IntVar()
-        self.current_maze_algoritm = IntVar()
-
+        self.grid_lines = []
+        self.size_slidebar = Scale(box1, from_=0, to=20, orient=HORIZONTAL, command=self.resize_grid)
+        self.size_slidebar.set(4)
+        self.speed_slidebar = Scale(box2, from_=0, to=100, orient=HORIZONTAL)
+        self.speed_slidebar.set(60)
+   
+        self.current_path_algorithm = IntVar()
+        self.current_maze_algorithm = IntVar()
+        
         self.canvas = tk.Canvas(root, height=canvas_height, width=canvas_width, bg='white')
-        self.canvas.bind("<Configure>", self.create_grid)
         self.canvas.bind("<Button>", self.check_mouse_type)
         self.canvas.bind("<B1-Motion>", self.check_mouse_type)
     
@@ -38,15 +41,15 @@ class Grid():
             self.check_square(event)
         
         
-    def create_grid(self, event):
-        w = self.canvas.winfo_width()
-        h = self.canvas.winfo_height()
-    
-        for i in range(self.grid_ind, w-self.grid_ind, self.square_side):
-            self.canvas.create_line([(i, self.grid_ind), (i, h-(h%self.square_side)-self.grid_ind)], tag='grid_line')
+    def create_grid(self):
+        grid_width = ((self.canvas_width-2*self.grid_ind)//self.square_side)*self.square_side
+        grid_height = ((self.canvas_height-2*self.grid_ind)//self.square_side)*self.square_side
 
-        for i in range(self.grid_ind, h-self.grid_ind, self.square_side):
-            self.canvas.create_line([(self.grid_ind, i), (w-(w%self.square_side)-self.grid_ind, i)], tag='grid_line')
+        for i in range(self.grid_ind, self.grid_ind+grid_width+1, self.square_side):
+            self.grid_lines.append(self.canvas.create_line([(i, self.grid_ind), (i, self.grid_ind+grid_height)], tag='grid_line'))
+
+        for i in range(self.grid_ind, self.grid_ind+grid_height+1, self.square_side):
+            self.grid_lines.append(self.canvas.create_line([(self.grid_ind, i), (self.grid_ind+grid_width, i)], tag='grid_line'))
 
     
     def check_square(self, event):
@@ -126,7 +129,7 @@ class Grid():
 
 
     def clear_grid(self):
-        check = messagebox.askyesno("Reset Canvas", "Are Your Sure? \n This will Clear the Entire Grid")
+        check = messagebox.askyesno("Reset Canvas", "Are Your Sure? \nThis will Clear the Entire Grid")
         if check:
             for square in self.filled_squares.values():
                 self.canvas.delete(square)
@@ -136,7 +139,7 @@ class Grid():
         self.update_after_event("Grid Cleared")
 
 
-    def visualize_path_algoritm(self):
+    def visualize_path_algorithm(self):
         if len(np.where( self.np_grid == 3 )[0]) == 0:
             messagebox.showwarning("Missing", "Need a Start and Stop Square to Find Path")
 
@@ -144,10 +147,12 @@ class Grid():
             start = str(np.where(self.np_grid==2)[0][0])+","+str(np.where(self.np_grid==2)[1][0])
             end = str(np.where(self.np_grid==3)[0][0])+","+str(np.where(self.np_grid==3)[1][0])
             
-            tentatives, path = top_menu.radio_functions["Path Finding Algoritms"][self.current_path_algoritm.get()](self.np_grid, start, end)
+            tentatives, path = top_menu.radio_functions["Path Finding Algorithms"][self.current_path_algorithm.get()](self.np_grid, start, end)
 
             smallest_tent = 0
             self.current_color = 5
+            #Could first sort them as tuples so first row in while-loop can be removed, might not be needed since other strat will probably be used
+            #Use first strat instead, show squares in middle of algorithm
             while True:
                 squares_to_show = [k for k,v in tentatives.items() if v == smallest_tent+1]
                 if smallest_tent >= tentatives[end] or len(squares_to_show) == 0:
@@ -157,7 +162,7 @@ class Grid():
                         if square != end:
                             self.fill_square(int(square.split(",")[1]), int(square.split(",")[0]))
                     self.canvas.update_idletasks()
-                    sleep(0.1)
+                    sleep( 0.31 - (self.speed_slidebar.get()/333) )
                     smallest_tent += 1
 
             if not path:
@@ -176,7 +181,7 @@ class Grid():
     
             self.current_color = 1
 
-        self.update_after_event("Path Shown")
+            self.update_after_event("Path Shown")
 
 
     def remove_found_path(self):
@@ -193,12 +198,11 @@ class Grid():
         if len(np.where(self.np_grid==0)[0]) != len(self.np_grid[0]) * len(self.np_grid):
             self.clear_grid()
 
-        maze = top_menu.radio_functions["Random Maze Algoritms"][self.current_maze_algoritm.get()](np.zeros(self.canvas_squares))
+        maze = top_menu.radio_functions["Random Maze Algorithms"][self.current_maze_algorithm.get()](np.zeros(self.canvas_squares))
         maze = fix_maze_bug(maze)
         self.current_color = 1
 
         squares = np.where(maze==1)
-        print(squares)
         largest_y = None
         for y,x in zip(squares[0],squares[1]):
             if largest_y == None or y > largest_y:
@@ -206,6 +210,49 @@ class Grid():
                 largest_y = y
                 sleep(0.05)
             self.fill_square(x, y)
+
+
+    def resize_grid(self, value):
+        self.square_side = (20-int(value))*3+13
+        squares_x = int((self.canvas_width-self.grid_ind*2) / self.square_side)
+        squares_y = int((self.canvas_height-self.grid_ind*2) / self.square_side)
+        self.canvas_squares = (squares_y, squares_x)
+
+        for line in self.grid_lines:
+            self.canvas.delete(line)
+            del line
+
+        self.create_grid()
+        if len(self.filled_squares) > 0:
+            old_np_grid = np.copy(self.np_grid)
+        self.np_grid = np.zeros(self.canvas_squares)
+        coords_to_del = []
+        squares_to_remove = ([],[])
+        for coord in self.filled_squares.keys():
+            sq_x, sq_y = int(coord.split(",")[0]), int(coord.split(",")[1])
+            self.canvas.delete(self.filled_squares[coord])
+            try:
+                self.np_grid[sq_y, sq_x] = old_np_grid[sq_y, sq_x]
+                self.current_color = int(old_np_grid[sq_y, sq_x])
+                self.fill_square(sq_x, sq_y)
+            except IndexError:
+                coords_to_del.append(coord)
+                if old_np_grid[sq_y, sq_x] == 2 or old_np_grid[sq_y, sq_x] == 3:
+                    squares_to_remove = np.where((old_np_grid==2) | (old_np_grid==3) | (old_np_grid==4) | (old_np_grid==5))
+
+
+        for y,x in zip(squares_to_remove[0], squares_to_remove[1]):
+            try:
+                self.np_grid[y,x] = 1
+                self.remove_square(x,y)
+            except IndexError:
+                pass
+
+
+        self.current_color = 1
+
+        for coord_to_del in coords_to_del:
+            del self.filled_squares[coord_to_del]
 
 
     def update_after_event(self, event):
@@ -221,7 +268,7 @@ class Grid():
             self.canvas.config(cursor="tcross")
             top_menu.update_menu(event)
 
-        elif event == "Clear grid":
+        elif event == "Grid Cleared":
             self.removing = False
             root.config(cursor="arrow")
             top_menu.update_menu(event)
@@ -238,6 +285,7 @@ class Menu_bar():
 
     def __init__(self, buttons=None, cascades=None, cascade_buttons=None, cascade_radios=None):
         self.menu = tk.Menu(root, tearoff=0)
+
         self.cascades = {}
         self.radio_functions = {}
         if buttons:
@@ -273,45 +321,61 @@ class Menu_bar():
 
     def update_menu(self, event):
         if event == "StartStop":
-            self.menu.entryconfig(4, label="Visualize Pathfinding!")         #Will later have "Visualize" button and not run visualisatioon when algoritm is chosen
+            self.menu.entryconfig(1, label="Visualize Pathfinding!")
+            self.menu.entryconfig(1, command=grid.visualize_path_algorithm)
 
         elif event == "Remove0":
-            self.menu.entryconfig(1, label="Start Erasing Squares") 
+            self.menu.entryconfig(2, label="Start Erasing Squares") 
             
         elif event == "Remove1":
-            self.menu.entryconfig(1, label="Stop Erasing Squares") 
+            self.menu.entryconfig(2, label="Stop Erasing Squares") 
             
-        elif event == "Clear grid":
-            self.menu.entryconfig(1, label="Start Removing Squares") 
-            self.menu.entryconfig(4, label="Visualize Pathfinding!")   
+        elif event == "Grid Cleared":
+            self.menu.entryconfig(2, label="Start Erasing Squares") 
+            self.menu.entryconfig(1, label="Visualize Pathfinding!")
+            self.menu.entryconfig(1, command=grid.visualize_path_algorithm)   
 
         elif event == "Path Shown":
-            self.menu.entryconfig(4, command=grid.remove_found_path)
-            self.menu.entryconfig(4, label="Reset Found Path")
+            self.menu.entryconfig(1, command=grid.remove_found_path)
+            self.menu.entryconfig(1, label="Reset Found Path")
 
         elif event == "Path Removed":
-            self.menu.entryconfig(4, command=grid.visualize_path_algoritm)
-            self.menu.entryconfig(4, label="Visualize Pathfinding!") 
+            self.menu.entryconfig(1, command=grid.visualize_path_algorithm)
+            self.menu.entryconfig(1, label="Visualize Pathfinding!") 
             
 
-            
+
+
 root = tk.Tk()
 
-grid = Grid(25, 1200, 800, 50, ["black", "blue", "red", "green", "gray"])
-grid.canvas.pack(side="bottom")
+box1 = Frame(root)
+box1.pack(fill=X)
+
+box2 = Frame(root)
+box2.pack(fill=X)
+
+grid = Grid(1200, 850, 50, ["black", "blue", "red", "green", "gray"])
+
+
+Label(box1, text="Grid Size", width=20).pack(side="left")
+grid.size_slidebar.pack(fill=X)
+Label(box2, text="Path Algorithm Speed", width=20).pack(side="left")
+grid.speed_slidebar.pack(fill=X)
+
+grid.canvas.pack(side="top")
 
 top_menu = Menu_bar(buttons = [("Place Start and Stop", grid.chose_start_stop),
-                               ("Visualize Pathfinding!", grid.visualize_path_algoritm)
+                               ("Visualize Pathfinding!", grid.visualize_path_algorithm),
                                ("Start Erasing Squares", grid.remove_squares),
                                ("Clear Grid", grid.clear_grid),
                                ("Generate Maze!", grid.display_maze)], 
 
-                    cascades = ["Path Finding Algoritms", "Random Maze Algoritms"],
-                    cascade_radios= {"Path Finding Algoritms": [("Dijkstrs Algoritm", (grid.current_path_algoritm, dijkstras_algoritm)),
-                                                                ("To Be Created", (grid.current_path_algoritm, grid.clear_grid))],
+                    cascades = ["Path Finding Algorithms", "Random Maze Algorithms"],
+                    cascade_radios= {"Path Finding Algorithms": [("Dijkstrs Algorithms", (grid.current_path_algorithm, dijkstras_algorithm)),
+                                                                ("To Be Created", (grid.current_path_algorithm, grid.clear_grid))],
 
-                                      "Random Maze Algoritms": [("Recursive Division", (grid.current_maze_algoritm, recursive_division)),
-                                                                ("To Be Created", (grid.current_maze_algoritm, grid.clear_grid))]})
+                                      "Random Maze Algorithms": [("Recursive Division", (grid.current_maze_algorithm, recursive_division)),
+                                                                ("To Be Created", (grid.current_maze_algorithm, grid.clear_grid))]})
 
 
 root.config(menu=top_menu.menu)
