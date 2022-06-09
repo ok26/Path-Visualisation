@@ -5,7 +5,8 @@ from tkinter import messagebox   #Because visualstudio error even when star impo
 import numpy as np
 from tkinter import *
 from maze_gen import recursive_division, fix_maze_bug
-from path_algorithms import dijkstras_algorithm
+from path_algorithms import visualize_dijkstras_algorithm, visualize_A_star
+import matplotlib.pyplot as plt
 
 
 class Grid():
@@ -20,7 +21,7 @@ class Grid():
         self.filled_squares = {}
         self.grid_lines = []
         self.size_slidebar = Scale(box1, from_=0, to=20, orient=HORIZONTAL, command=self.resize_grid)
-        self.size_slidebar.set(4)
+        self.size_slidebar.set(10)
         self.speed_slidebar = Scale(box2, from_=0, to=100, orient=HORIZONTAL)
         self.speed_slidebar.set(60)
    
@@ -56,7 +57,7 @@ class Grid():
         x = event.x
         y = event.y
 
-        if not (x <= self.grid_ind or x >= (self.canvas_width - self.grid_ind) or y <= self.grid_ind or y >= (self.canvas_height - self.grid_ind)):
+        if not (x <= self.grid_ind or x >= (self.canvas_squares[1]*self.square_side+self.grid_ind) or y <= self.grid_ind or y >= (self.canvas_squares[0]*self.square_side+self.grid_ind)):
 
             SquareX = floor((x-self.grid_ind)/(self.square_side))
             SquareY = floor((y-self.grid_ind)/(self.square_side))
@@ -144,26 +145,10 @@ class Grid():
             messagebox.showwarning("Missing", "Need a Start and Stop Square to Find Path")
 
         else:
-            start = str(np.where(self.np_grid==2)[0][0])+","+str(np.where(self.np_grid==2)[1][0])
+            start = str(np.where(self.np_grid==2)[0][0])+","+str(np.where(self.np_grid==2)[1][0])   #Dumb, fix
             end = str(np.where(self.np_grid==3)[0][0])+","+str(np.where(self.np_grid==3)[1][0])
             
-            tentatives, path = top_menu.radio_functions["Path Finding Algorithms"][self.current_path_algorithm.get()](self.np_grid, start, end)
-
-            smallest_tent = 0
-            self.current_color = 5
-            #Could first sort them as tuples so first row in while-loop can be removed, might not be needed since other strat will probably be used
-            #Use first strat instead, show squares in middle of algorithm
-            while True:
-                squares_to_show = [k for k,v in tentatives.items() if v == smallest_tent+1]
-                if smallest_tent >= tentatives[end] or len(squares_to_show) == 0:
-                    break
-                else:
-                    for square in squares_to_show:
-                        if square != end:
-                            self.fill_square(int(square.split(",")[1]), int(square.split(",")[0]))
-                    self.canvas.update_idletasks()
-                    sleep( 0.31 - (self.speed_slidebar.get()/333) )
-                    smallest_tent += 1
+            path = top_menu.radio_functions["Path Finding Algorithms"][self.current_path_algorithm.get()](self.np_grid, start, end, self)
 
             if not path:
                 messagebox.showerror("No Path", "No Possible Path from Start to End")
@@ -198,18 +183,27 @@ class Grid():
         if len(np.where(self.np_grid==0)[0]) != len(self.np_grid[0]) * len(self.np_grid):
             self.clear_grid()
 
-        maze = top_menu.radio_functions["Random Maze Algorithms"][self.current_maze_algorithm.get()](np.zeros(self.canvas_squares))
-        maze = fix_maze_bug(maze)
-        self.current_color = 1
+        if not len(np.where(self.np_grid==0)[0]) != len(self.np_grid[0]) * len(self.np_grid):
+            maze_order = top_menu.radio_functions["Random Maze Algorithms"][self.current_maze_algorithm.get()](np.zeros(self.canvas_squares))
 
-        squares = np.where(maze==1)
-        largest_y = None
-        for y,x in zip(squares[0],squares[1]):
-            if largest_y == None or y > largest_y:
+            self.current_color = 1
+            min_value = 1
+            max_value = np.amax(maze_order)
+
+            while min_value <= max_value:
+                squares = np.where(maze_order==min_value)
+                speed = 0
+                for y,x in zip(squares[0],squares[1]):
+                    self.fill_square(x, y)
+                    if speed%ceil((self.speed_slidebar.get()+1)/20)==0:
+                        self.canvas.update_idletasks()
+                        sleep(0.02)
+                    speed += 1
                 self.canvas.update_idletasks()
-                largest_y = y
-                sleep(0.05)
-            self.fill_square(x, y)
+                min_value += 1
+
+            if self.current_maze_algorithm.get() == 0:  #recursive division
+                fix_maze_bug(self)
 
 
     def resize_grid(self, value):
@@ -343,9 +337,7 @@ class Menu_bar():
             self.menu.entryconfig(1, command=grid.visualize_path_algorithm)
             self.menu.entryconfig(1, label="Visualize Pathfinding!") 
             
-
-
-
+            
 root = tk.Tk()
 
 box1 = Frame(root)
@@ -371,7 +363,8 @@ top_menu = Menu_bar(buttons = [("Place Start and Stop", grid.chose_start_stop),
                                ("Generate Maze!", grid.display_maze)], 
 
                     cascades = ["Path Finding Algorithms", "Random Maze Algorithms"],
-                    cascade_radios= {"Path Finding Algorithms": [("Dijkstrs Algorithms", (grid.current_path_algorithm, dijkstras_algorithm)),
+                    cascade_radios= {"Path Finding Algorithms": [("Dijkstras Algorithm", (grid.current_path_algorithm, visualize_dijkstras_algorithm)),
+                                                                 ("A*", (grid.current_path_algorithm, visualize_A_star)),
                                                                 ("To Be Created", (grid.current_path_algorithm, grid.clear_grid))],
 
                                       "Random Maze Algorithms": [("Recursive Division", (grid.current_maze_algorithm, recursive_division)),
