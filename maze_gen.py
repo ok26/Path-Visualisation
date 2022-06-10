@@ -130,3 +130,11 @@ def fix_maze_bug(grid_obj):
                     else:
                         grid_obj.fill_square(x,y)
                         grid_obj.remove_square(x-1,y)
+
+
+def scatter(grid):
+    for y in range(len(grid)):
+        for x in range(len(grid[0])):
+            if randint(0,100) >= 67:
+                grid[y,x] = y+1
+    return grid

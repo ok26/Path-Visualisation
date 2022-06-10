@@ -1,0 +1,10 @@
+[{"name": "Dijkstra's Algorithm",
+  "description": "\nGuarantees shotest path: Yes\nKnows where end destination is located: No\nSpeed: Slow"},
+{"name": "A*",
+ "description": "\nGuarantees shotest path: Yes\nKnows where end destination is located: Yes\nSpeed: Medium"},
+{"name": "Greedy",
+ "description": "\nGuarantees shotest path: No\nKnows where end destination is located: Yes\nSpeed: Very Fast"},
+{"name": "Bidirectional Dijkstra's",
+ "description": "\nGuarantees shotest path: Yes\nKnows where end destination is located: No\nSpeed: Slow"},
+{"name": "Bidirectional A*",
+ "description": "\nGuarantees shotest path: Yes\nKnows where end destination is located: Yes\nSpeed: Fast"}]
