@@ -24,7 +24,7 @@ def assemble_path(end, dist_values, grid):
     return path
 
 
-def visualize_dijkstras_algorithm(grid, start, end, grid_obj, bidirectional, update):
+def visualize_dijkstras_algorithm(grid, start, end, grid_obj):
     tentatives = {}
     unvisited = {}
     counter = 0
@@ -54,17 +54,15 @@ def visualize_dijkstras_algorithm(grid, start, end, grid_obj, bidirectional, upd
         #Displays on canvas, does not work properly, fix in future
         if current != start and current != end:
             if counter == int(grid_obj.speed_slidebar.get()/10):
-                if update:
-                    grid_obj.canvas.update_idletasks()
                 sleep(0.03)
                 counter = 0
             else:
                 counter += 1
-            if bidirectional and grid_obj.np_grid[int(current.split(",")[0]), int(current.split(",")[1])] == 5:
-                path = assemble_path(current, tentatives, grid)
-                return path, len([v for k,v in tentatives.items() if v != float("inf") and not unvisited[k]])
 
-            grid_obj.fill_square(int(current.split(",")[1]), int(current.split(",")[0]))
+            if grid_obj.size_slidebar.get() > 14:
+                grid_obj.fill_square_without_animation(int(current.split(",")[1]), int(current.split(",")[0]))
+            else:
+                grid_obj.fill_square(int(current.split(",")[1]), int(current.split(",")[0]), 40)
 
 
         alt = tentatives[current] + 1
@@ -96,7 +94,7 @@ def visualize_dijkstras_algorithm(grid, start, end, grid_obj, bidirectional, upd
 
 
 
-def visualize_A_star(grid, start, end, grid_obj, bidirectional, update):
+def visualize_A_star(grid, start, end, grid_obj):
     counter = 0
     unvisited = {}  #open list
     visited = {}  #closed list
@@ -117,19 +115,15 @@ def visualize_A_star(grid, start, end, grid_obj, bidirectional, update):
 
         if mink != start and mink != end: 
             if counter == int(grid_obj.speed_slidebar.get()/10):
-                if update:
-                    grid_obj.canvas.update_idletasks()
                 sleep(0.03)
                 counter = 0
             else:
                 counter += 1
-            if bidirectional and grid_obj.np_grid[int(mink.split(",")[0]), int(mink.split(",")[1])] == 5:
-                visited[mink] = unvisited[mink]
-                for k in visited.keys():
-                    visited[k] = visited[k][1]
-                path = assemble_path(mink, visited, grid)
-                return path, len([v for v in visited.values() if v != float("inf")])
-            grid_obj.fill_square(x, y)
+
+            if grid_obj.size_slidebar.get() > 14:
+                grid_obj.fill_square_without_animation(x, y)
+            else:
+                grid_obj.fill_square(x, y, 40)
 
         visited[mink] = unvisited[mink]
         del unvisited[mink]
@@ -170,7 +164,7 @@ def visualize_A_star(grid, start, end, grid_obj, bidirectional, update):
 
 
 
-def visualize_Greedy(grid, start, end, grid_obj, bidirectional, update):
+def visualize_Greedy(grid, start, end, grid_obj):
     counter = 0
     unvisited = {}  #open list
     visited = {}  #closed list
@@ -190,9 +184,12 @@ def visualize_Greedy(grid, start, end, grid_obj, bidirectional, update):
         x,y = int(mink.split(",")[1]), int(mink.split(",")[0])
 
         if mink != start and mink != end: 
-            grid_obj.fill_square(x, y)
+            if str(x)+","+str(y) not in grid_obj.filled_squares:
+                if grid_obj.size_slidebar.get() > 14:
+                    grid_obj.fill_square_without_animation(x, y)
+                else:
+                    grid_obj.fill_square(x, y, 40)
             if counter == int(grid_obj.speed_slidebar.get()/10):
-                grid_obj.canvas.update_idletasks()
                 sleep(0.03)
                 counter = 0
             else:

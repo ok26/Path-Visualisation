@@ -91,11 +91,11 @@ def fix_maze_bug(grid_obj):
                 if len(check) == 3:
                    for i in range(3):
                         if i != 1 and grid_obj.np_grid[y,x-1+i] == 0:
-                            grid_obj.fill_square(x,y)
+                            grid_obj.fill_square_without_animation(x,y)
                             grid_obj.remove_square(x,y-1)
                             break
                         if i != 1 and grid_obj.np_grid[y-1+i,x] == 0:
-                            grid_obj.fill_square(x,y)
+                            grid_obj.fill_square_without_animation(x,y)
                             grid_obj.remove_square(x-1,y)
                             break
                 else:
@@ -125,10 +125,10 @@ def fix_maze_bug(grid_obj):
                         i += 1
 
                     if total_y >= total_x:
-                        grid_obj.fill_square(x,y)
+                        grid_obj.fill_square_without_animation(x,y)
                         grid_obj.remove_square(x,y-1)
                     else:
-                        grid_obj.fill_square(x,y)
+                        grid_obj.fill_square_without_animation(x,y)
                         grid_obj.remove_square(x-1,y)
 
 
