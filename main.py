@@ -1,14 +1,14 @@
 from time import sleep
 import tkinter as tk
 from math import floor, ceil
-from tkinter import messagebox
-from cv2 import rectangle  #Because visualstudio error even when star import
+from tkinter import messagebox  #Because visualstudio error even when star import
 import numpy as np
 import threading, json
 from tkinter import *
 from threading import Thread
 from maze_gen import recursive_division, fix_maze_bug, scatter
 from path_algorithms import visualize_dijkstras_algorithm, visualize_A_star, visualize_Greedy
+from algorithms_timecheck import A_star_time, Greedy_time, djikstra_time
 
 
 class Grid():
@@ -174,11 +174,42 @@ class Grid():
             start = str(np.where(self.np_grid==2)[0][0])+","+str(np.where(self.np_grid==2)[1][0])   #Dumb, fix
             end = str(np.where(self.np_grid==3)[0][0])+","+str(np.where(self.np_grid==3)[1][0])
             threading.Thread(target=lambda: self.visualize_path_algorithm(start,end)).start()
-            
+
+
+    def display_with_order(self, order, instant, animation_speed=40, big_grid=False):
+        min_value = 1
+        max_value = np.amax(order)
+        if not instant:
+            while min_value <= max_value and self.cancel_algorithm==False:
+                squares = np.where(order==min_value)
+                speed = 0
+                for y,x in zip(squares[0],squares[1]):
+                    if big_grid:
+                        self.fill_square_without_animation(x,y)
+                    else:
+                        self.fill_square(x, y, animation_speed)
+
+                    if speed%ceil((self.speed_slidebar.get()+1)/20)==0:
+                        sleep(0.02)
+                    speed += 1
+                min_value += 1
+        else:
+            coords = np.where(order!=0)
+            for x,y in zip(coords[1], coords[0]):
+                self.fill_square_without_animation(x, y)
+
             
     def visualize_path_algorithm(self, start, end):
         self.disable_before_algorithm()
-        path, squares_searched = top_menu.radio_functions["Path Finding Algorithms"][self.current_path_algorithm.get()](self.np_grid, start, end, self)
+        alg_order, path, squares_searched = top_menu.radio_functions["Path Finding Algorithms"][self.current_path_algorithm.get()](self.np_grid, start, end, self)
+
+        self.current_color = 5
+        if self.instant_algorithms.get():
+            self.display_with_order(alg_order, True)
+        elif self.size_slidebar.get() > 14:
+            self.display_with_order(alg_order, False, big_grid=True)
+        else:
+            self.display_with_order(alg_order, False, 40)
 
         if path == False:
             self.cancel_algorithm = True
@@ -192,10 +223,10 @@ class Grid():
         else:
             self.path = path
             self.squares_searched = squares_searched
-            self.visualize_path(self.path)
+            self.visualize_path(self.path, start, end)
 
             
-    def visualize_path(self, path):
+    def visualize_path(self, path, start, end):
         self.wait_for_animation()
         squares_beneath_path = []
         self.current_color = 4
@@ -212,8 +243,9 @@ class Grid():
         for bsquare in squares_beneath_path:
             self.canvas.delete(bsquare)
 
+        time = time_algorithms[self.current_path_algorithm.get()](25, self.np_grid, start, end)
         update_text((len(self.path), self.squares_searched))
-        self.update_saved(len(self.path), self.squares_searched)
+        self.update_saved(len(self.path), self.squares_searched, time)
         self.current_color = 1
         self.path = []
         self.squares_searched = 0
@@ -242,28 +274,17 @@ class Grid():
         if not len(np.where(self.np_grid==0)[0]) != len(self.np_grid[0]) * len(self.np_grid):
             maze_order = top_menu.radio_functions["Maze/Pattern Algorithms"][self.current_maze_algorithm.get()](np.zeros(self.canvas_squares))
 
-        threading.Thread(target=lambda: self.display_maze(maze_order)).start()
+            threading.Thread(target=lambda: self.display_maze(maze_order)).start()
 
 
     def display_maze(self, maze_order):
             self.disable_before_algorithm()
             self.current_color = 1
-            min_value = 1
-            max_value = np.amax(maze_order)
+    
             if self.instant_algorithms.get():
-                coords = np.where(maze_order!=0)
-                for x,y in zip(coords[1], coords[0]):
-                    self.fill_square_without_animation(x, y)
+                self.display_with_order(maze_order, True)
             else:
-                while min_value <= max_value and self.cancel_algorithm==False:
-                    squares = np.where(maze_order==min_value)
-                    speed = 0
-                    for y,x in zip(squares[0],squares[1]):
-                        self.fill_square(x, y, 40)
-                        if speed%ceil((self.speed_slidebar.get()+1)/20)==0:
-                            sleep(0.02)
-                        speed += 1
-                    min_value += 1
+                self.display_with_order(maze_order, False, 40)
 
             if self.current_maze_algorithm.get() == 0 and self.cancel_algorithm==False:  #recursive division
                 fix_maze_bug(self)
@@ -371,15 +392,16 @@ class Grid():
             self.squares_searched = 0
             update_text((0,0))
 
-    def update_saved(self, length, total):
+    def update_saved(self, length, total, time):
         current = self.current_path_algorithm.get()
-        saved_data_labels[current].config(text=algorithm_data[current]["saved"]+ str(length)+", "+str(total))
+        saved_data_labels[current].config(text=algorithm_data[current]["saved"]+ str(length)+", "+str(total)+", "+str(round(time*1000,3))+"ms")
         self.saved_data_reset = False
 
     def delete_saved(self):
         for i, alg in enumerate(algorithm_data):
-            saved_data_labels[i].config(text=alg["saved"]+"0, 0")
+            saved_data_labels[i].config(text=alg["saved"]+"0, 0, 0.0ms")
         self.saved_data_reset = True
+
 
 
              
@@ -583,12 +605,14 @@ top_menu = Menu_bar(buttons = [("Place Start and Stop", grid.chose_start_stop),
                                       "Maze/Pattern Algorithms": [("Recursive Division", (grid.current_maze_algorithm, recursive_division)),
                                                                   ("Scatter", (grid.current_maze_algorithm, scatter)),
                                                                   ("To Be Created", (grid.current_maze_algorithm, grid.clear_grid))]})
+time_algorithms = [djikstra_time, A_star_time, Greedy_time]
 
 def upd_inst_alg_label():
     if grid.instant_algorithms.get():
         instant_alg_label.config(text="Instant Algorithms: Yes")
     else:
         instant_alg_label.config(text="Instant Algorithms: No")
+
 top_menu.menu.add_checkbutton(label="Instant Algorithms", variable=grid.instant_algorithms, onvalue=1, offvalue=0, command=upd_inst_alg_label)
 
 with open("algorithm_descriptions.json", "r") as f: 
@@ -604,7 +628,7 @@ squares_searched_label = Label(subbox2, text="\n Total Squares Searched: \n0", f
 squares_searched_label.pack(side="top", fill=X)
 
 Label(subbox2, text="                                        \n ", font=("Arial",20)).pack(side="top")   #idk
-Label(subbox2, text="Saved Data For Current Grid:\n(Path's Length, Total Squares)\n", font=("Arial", 13)).pack(side="top")
+Label(subbox2, text="Saved Data For Current Grid:\n(Path's Length, Squares Checked, Real Time)\n", font=("Arial", 12)).pack(side="top")
 
 longest_name = ""
 for alg in algorithm_data:
@@ -616,10 +640,10 @@ for alg in algorithm_data:
     tabs = "\t" * int((len(longest_name)-len(alg["name"]))/7+1)         #Totally always works
     if len(saved_data_labels) == 0:
         tabs += "\t"
-    alg["saved"] = alg["name"] + ":" + tabs
-    temp = Label(subbox2, text=alg["saved"] + "0, 0", font=("Arial", 12))
+    alg["saved"] = alg["name"] + ":\n"
+    temp = Label(subbox2, text=alg["saved"] + "0, 0, 0.0ms", font=("Arial", 10))
     saved_data_labels.append(temp)
-    temp.pack(side="top")
+    temp.pack(side="top", pady=2)
     del temp
 
 instant_alg_label = Label(subbox3, text="Instant Algorithms: No" , font=("Arial", 12))
