@@ -3,12 +3,12 @@ import tkinter as tk
 from math import floor, ceil
 from tkinter import messagebox  #Because visualstudio error even when star import
 import numpy as np
-import threading, json
+import json
 from tkinter import *
 from threading import Thread
-from maze_gen import recursive_division, fix_maze_bug, scatter
-from path_algorithms import visualize_dijkstras_algorithm, visualize_A_star, visualize_Greedy
-from algorithms_timecheck import A_star_time, Greedy_time, djikstra_time
+from pattern_algorithms import recursive_division, fix_maze_bug, scatter
+from pathfinding_algorithms import visualize_dijkstras_algorithm, visualize_A_star, visualize_Greedy, depth_first, breadth_first
+from timecheck import A_star_time, Greedy_time, djikstra_time, depth_first_time, breadth_first_time
 
 
 class Grid():
@@ -33,11 +33,11 @@ class Grid():
         self.current_maze_algorithm = IntVar()
         self.instant_algorithms = IntVar()
         self.cancel_algorithm = False
-        self.path = []
-        self.squares_searched = 0
         self.saved_data_reset = True
+        self.alg_running = False
         
         self.canvas = tk.Canvas(box1, height=canvas_height, width=canvas_width, bg='white')
+        self.canvas.bind("<Configure>", lambda event: Thread(target=check_grid).start())
         self.canvas.bind("<Destroy>", self.shutdown)
         self.canvas.bind("<Button>", self.check_mouse_type)
         self.canvas.bind("<B1-Motion>", self.check_mouse_type)
@@ -48,8 +48,8 @@ class Grid():
     def check_mouse_type(self, event):
         if event.num == 1:
             self.check_square(event)
-        elif event.num == 3:
-            pass
+        elif event.num == 2: #mac
+            top_menu.menu.tk_popup(event.x_root, event.y_root)
         elif event.num not in [1,2,3,4,5]:
             self.check_square(event)
         
@@ -75,54 +75,55 @@ class Grid():
             SquareY = floor((y-self.grid_ind)/(self.square_side))
 
             if not self.np_grid[SquareY, SquareX] and not self.removing:
-                self.fill_square(SquareX, SquareY, 14)
+                self.fill_square((SquareY, SquareX), 14)
 
             elif self.removing and self.np_grid[SquareY, SquareX] != 0:
-                self.remove_square(SquareX, SquareY)
+                self.remove_square((SquareY, SquareX))
             
 
-    def fill_square(self, SquareX, SquareY, animation_speed):
-        center_x = int(SquareX * self.square_side + self.grid_ind + self.square_side/2)
-        center_y = int(SquareY * self.square_side + self.grid_ind + self.square_side/2)
-        self.np_grid[SquareY, SquareX] = self.current_color
-        self.animate_squares.append(Square(self.canvas, self.current_color, (SquareX, SquareY), self.square_side, (center_x, center_y), animation_speed))
+    def fill_square(self, square, animation_speed):
+        center_x = int(square[1] * self.square_side + self.grid_ind + self.square_side/2)
+        center_y = int(square[0] * self.square_side + self.grid_ind + self.square_side/2)
+        self.np_grid[square[0], square[1]] = self.current_color
+        self.animate_squares.append(Square(self.canvas, self.current_color, square, self.square_side, (center_x, center_y), animation_speed))
         if self.current_color > 1 and self.current_color < 4:
             self.chose_start_stop()
         elif not self.saved_data_reset and self.current_color in [1,2,3]:
             self.delete_saved()
 
-    def fill_square_without_animation(self, SquareX, SquareY):
-        self.filled_squares[str(SquareX)+","+str(SquareY)] = self.canvas.create_rectangle(SquareX * self.square_side + self.grid_ind, 
-                                                                                          SquareY * self.square_side + self.grid_ind, 
-                                                                                          SquareX * self.square_side + self.grid_ind + self.square_side, 
-                                                                                          SquareY * self.square_side + self.grid_ind + self.square_side, 
-                                                                                          fill=self.colors[self.current_color-1])
-        self.np_grid[SquareY, SquareX] = self.current_color
+
+    def fill_square_without_animation(self, square, color):
+        self.filled_squares[square] = self.canvas.create_rectangle(square[1] * self.square_side + self.grid_ind, 
+                                                                                          square[0] * self.square_side + self.grid_ind, 
+                                                                                          square[1] * self.square_side + self.grid_ind + self.square_side, 
+                                                                                          square[0] * self.square_side + self.grid_ind + self.square_side, 
+                                                                                          fill=color)
+        self.np_grid[square[0], square[1]] = self.current_color
         if not self.saved_data_reset and self.current_color in [1,2,3]:
             self.delete_saved()
 
     
-    def remove_square(self, SquareX, SquareY):
-        if self.np_grid[SquareY, SquareX] == 2 or self.np_grid[SquareY, SquareX] == 3:
+    def remove_square(self, square):
+        if self.np_grid[square[0], square[1]] in [2,3]:
             new = messagebox.askyesno("Reset", "Delete Start and Stop Squares?")
             if new:
-                self.canvas.delete(self.filled_squares[str(SquareX)+","+str(SquareY)])
-                self.np_grid[SquareY, SquareX] = 0
+                self.canvas.delete(self.filled_squares[square])
+                self.np_grid[square[0], square[1]] = 0
                 Second_square = np.where((self.np_grid == 2) | (self.np_grid == 3))
                 self.canvas.delete(self.filled_squares[str(Second_square[1][0])+","+str(Second_square[0][0])])
                 self.np_grid[Second_square] = 0
-                del self.filled_squares[str(SquareX)+","+str(SquareY)]
-                del self.filled_squares[str(Second_square[1][0])+","+str(Second_square[0][0])]
+                del self.filled_squares[square]
+                del self.filled_squares[(Second_square[0][0], Second_square[1][0])]
                 if len(np.where( self.np_grid == 4 )) > 0:
                     self.remove_found_path()
 
-        elif self.np_grid[SquareY, SquareX] == 4 or self.np_grid[SquareY, SquareX] == 5:
+        elif self.np_grid[square[0], square[1]] in [4,5]:
             messagebox.showerror("Error", "You can't delete Path square, use 'Reset Found Path' instead")
 
         else:
-            self.canvas.delete(self.filled_squares[str(SquareX)+","+str(SquareY)])
-            self.np_grid[SquareY, SquareX] = 0
-            del self.filled_squares[str(SquareX)+","+str(SquareY)]
+            self.canvas.delete(self.filled_squares[square])
+            self.np_grid[square[0], square[1]] = 0
+            del self.filled_squares[square]
             if not self.saved_data_reset:
                 self.delete_saved()
 
@@ -134,8 +135,8 @@ class Grid():
                 squares_to_del = np.where( (self.np_grid == 2) | (self.np_grid == 3) | (self.np_grid == 4) | (self.np_grid == 5))
                 self.np_grid[squares_to_del] = 0
                 for y,x in zip(squares_to_del[0], squares_to_del[1]):
-                    self.canvas.delete(self.filled_squares[str(x)+","+str(y)])
-                    del self.filled_squares[str(x)+","+str(y)]
+                    self.canvas.delete(self.filled_squares[(y,x)])
+                    del self.filled_squares[y,x]
 
                 self.current_color += 1
         else:
@@ -144,7 +145,7 @@ class Grid():
             if self.current_color > 3:
                 self.current_color = 1
         
-        self.update_after_event("StartStop")
+            self.update_after_event("StartStop")
 
 
     def remove_squares(self):
@@ -171,99 +172,111 @@ class Grid():
             messagebox.showwarning("Missing", "Need a Start and Stop Square to Find Path")
 
         else:
-            start = str(np.where(self.np_grid==2)[0][0])+","+str(np.where(self.np_grid==2)[1][0])   #Dumb, fix
-            end = str(np.where(self.np_grid==3)[0][0])+","+str(np.where(self.np_grid==3)[1][0])
-            threading.Thread(target=lambda: self.visualize_path_algorithm(start,end)).start()
+            start = (np.where(self.np_grid==2)[0][0], np.where(self.np_grid==2)[1][0])  #Dumb, fix
+            end = (np.where(self.np_grid==3)[0][0], np.where(self.np_grid==3)[1][0])
+            self.visualize_path_algorithm(start, end)
 
 
-    def display_with_order(self, order, instant, animation_speed=40, big_grid=False):
+    def display_with_order(self, order, instant, animation_speed=40, distances_to_start=None):
         min_value = 1
         max_value = np.amax(order)
+        if distances_to_start != None:
+            max_dist = max(list(distances_to_start.values()))
         if not instant:
+            speed = 0
             while min_value <= max_value and self.cancel_algorithm==False:
                 squares = np.where(order==min_value)
-                speed = 0
                 for y,x in zip(squares[0],squares[1]):
-                    if big_grid:
-                        self.fill_square_without_animation(x,y)
-                    else:
-                        self.fill_square(x, y, animation_speed)
-
-                    if speed%ceil((self.speed_slidebar.get()+1)/20)==0:
+                    self.fill_square((y,x), animation_speed)
+                    if distances_to_start != None:
+                        self.animate_squares[-1].final_color = distances_to_start[(y,x)]/max_dist
+                    if speed%int((self.speed_slidebar.get()/4+1))==0:
                         sleep(0.02)
+                        update_squares()
+                        self.canvas.update()
                     speed += 1
                 min_value += 1
         else:
             coords = np.where(order!=0)
             for x,y in zip(coords[1], coords[0]):
-                self.fill_square_without_animation(x, y)
+                if distances_to_start != None:
+                    color = gen_color(3, 100, distances_to_start[(y,x)]/max_dist)
+                else:
+                    color = colors[self.current_color-1]
+                self.fill_square_without_animation((y,x), color)
+        self.finish_animation()
 
             
     def visualize_path_algorithm(self, start, end):
         self.disable_before_algorithm()
-        alg_order, path, squares_searched = top_menu.radio_functions["Path Finding Algorithms"][self.current_path_algorithm.get()](self.np_grid, start, end, self)
+        alg_order, path, squares_searched, distances_to_start = top_menu.radio_functions["Path Finding Algorithms"][self.current_path_algorithm.get()](self.np_grid, start, end)
 
         self.current_color = 5
         if self.instant_algorithms.get():
-            self.display_with_order(alg_order, True)
-        elif self.size_slidebar.get() > 14:
-            self.display_with_order(alg_order, False, big_grid=True)
+            self.display_with_order(alg_order, True, distances_to_start=distances_to_start)
+            self.canvas.update()
         else:
-            self.display_with_order(alg_order, False, 40)
+            self.display_with_order(alg_order, False, 30, distances_to_start)
 
         if path == False:
             self.cancel_algorithm = True
             messagebox.showerror("No Path", "No Possible Path from Start to End")
+            time = time_algorithms[self.current_path_algorithm.get()](25, self.np_grid, start, end)
             self.current_color = 1
-            self.path = []
-            self.squares_searched = 0
+            self.update_saved("N/A", squares_searched, time)
+            update_text(("N/A", squares_searched))
             self.update_after_event("Path Shown")
             self.enable_after_algorithm()
             self.cancel_algorithm = False
         else:
-            self.path = path
-            self.squares_searched = squares_searched
-            self.visualize_path(self.path, start, end)
+            self.visualize_path(path, squares_searched, start, end)
 
             
-    def visualize_path(self, path, start, end):
-        self.wait_for_animation()
+    def visualize_path(self, path, squares_searched, start, end):
         squares_beneath_path = []
         self.current_color = 4
+        counter = 0
         for square in path:
-            sq_x, sq_y = square.split(",")[1], square.split(",")[0]
-            squares_beneath_path.append(self.filled_squares[sq_x+","+sq_y])
-            self.np_grid[int(sq_y), int(sq_x)] = 0
-            del self.filled_squares[sq_x+","+sq_y]
+            sq_x, sq_y = square[1], square[0]
+            squares_beneath_path.append(self.filled_squares[square])
+            self.np_grid[sq_y, sq_x] = 0
+            del self.filled_squares[square]
 
-            self.fill_square(int(sq_x), int(sq_y), 25)
-            sleep(0.03)
-            self.canvas.update_idletasks()
-        self.wait_for_animation()
+            if not self.instant_algorithms.get():
+                counter += 1
+                self.fill_square(square, 40)
+                if counter%3==0:
+                    sleep(0.01)
+                    update_squares()
+                    self.canvas.update()
+            else:
+                self.fill_square_without_animation(square, colors[self.current_color-1])
+        self.finish_animation()
         for bsquare in squares_beneath_path:
             self.canvas.delete(bsquare)
+        self.canvas.update()
 
         time = time_algorithms[self.current_path_algorithm.get()](25, self.np_grid, start, end)
-        update_text((len(self.path), self.squares_searched))
-        self.update_saved(len(self.path), self.squares_searched, time)
+        update_text((len(path), squares_searched))
+        self.update_saved(len(path), squares_searched, time)
         self.current_color = 1
-        self.path = []
-        self.squares_searched = 0
         self.update_after_event("Path Shown")
         self.enable_after_algorithm()
         self.cancel_algorithm = False
         
 
-    def wait_for_animation(self):
-        while len(self.animate_squares) != 0:
-            sleep(0.1)
+    def finish_animation(self):
+        while len(self.animate_squares) > 0:
+            update_squares()
+            self.canvas.update()
+            sleep(0.01)
 
 
     def remove_found_path(self):
-        for SquareY, SquareX in zip(np.where( (self.np_grid == 4) | (self.np_grid == 5) )[0], np.where( (self.np_grid == 4) | (self.np_grid == 5) )[1]):
-            self.canvas.delete(self.filled_squares[str(SquareX)+","+str(SquareY)])
-            self.np_grid[SquareY, SquareX] = 0
-            del self.filled_squares[str(SquareX)+","+str(SquareY)]
+        for square in zip(np.where( (self.np_grid == 4) | (self.np_grid == 5) )[0], np.where( (self.np_grid == 4) | (self.np_grid == 5) )[1]):
+            self.canvas.delete(self.filled_squares[square])
+            self.np_grid[square[0], square[1]] = 0
+            del self.filled_squares[square]
         self.update_after_event("Path Removed")
 
 
@@ -274,7 +287,7 @@ class Grid():
         if not len(np.where(self.np_grid==0)[0]) != len(self.np_grid[0]) * len(self.np_grid):
             maze_order = top_menu.radio_functions["Maze/Pattern Algorithms"][self.current_maze_algorithm.get()](np.zeros(self.canvas_squares))
 
-            threading.Thread(target=lambda: self.display_maze(maze_order)).start()
+            self.display_maze(maze_order)
 
 
     def display_maze(self, maze_order):
@@ -312,22 +325,23 @@ class Grid():
         self.np_grid = np.zeros(self.canvas_squares)
         coords_to_del = []
         squares_to_remove = ([],[])
-        for coord in self.filled_squares.keys():
-            sq_x, sq_y = int(coord.split(",")[0]), int(coord.split(",")[1])
-            self.canvas.delete(self.filled_squares[coord])
+        for square in self.filled_squares.keys():
+            color = self.canvas.itemcget(self.filled_squares[square], "fill")
+            self.canvas.delete(self.filled_squares[square])
             try:
-                self.np_grid[sq_y, sq_x] = old_np_grid[sq_y, sq_x]
-                self.current_color = int(old_np_grid[sq_y, sq_x])
-                self.fill_square_without_animation(sq_x, sq_y)
+                self.np_grid[square[0], square[1]] = old_np_grid[square[0], square[1]]
+                self.current_color = int(old_np_grid[square[0], square[1]])
+                self.fill_square_without_animation(square, color)
             except IndexError:
-                coords_to_del.append(coord)
-                if old_np_grid[sq_y, sq_x] == 2 or old_np_grid[sq_y, sq_x] == 3:
+                coords_to_del.append(square)
+                if old_np_grid[square[0], square[1]] == 2 or old_np_grid[square[0], square[1]] == 3:
                     squares_to_remove = np.where((old_np_grid==2) | (old_np_grid==3) | (old_np_grid==4) | (old_np_grid==5))
+            
 
-        for y,x in zip(squares_to_remove[0], squares_to_remove[1]):
+        for square in zip(squares_to_remove[0], squares_to_remove[1]):
             try:
-                self.np_grid[y,x] = 1
-                self.remove_square(x,y)
+                self.np_grid[square[0],square[1]] = 1
+                self.remove_square(square)
             except IndexError:
                 pass
 
@@ -337,6 +351,8 @@ class Grid():
 
 
     def disable_before_algorithm(self):
+        self.alg_running = True
+        self.finish_animation()
         self.size_slidebar.config(state=DISABLED)
         top_menu.menu.entryconfig(1, state=DISABLED)
         top_menu.menu.entryconfig(4, state=DISABLED)
@@ -345,6 +361,7 @@ class Grid():
         self.canvas.bind("<B1-Motion>", lambda event:None)
 
         top_menu.menu.entryconfig(5, state=NORMAL)
+        
     
     def enable_after_algorithm(self):
         self.size_slidebar.config(state=NORMAL)
@@ -354,14 +371,13 @@ class Grid():
         top_menu.menu.entryconfig(5, state=DISABLED)
         self.canvas.bind("<Button>", self.check_mouse_type)
         self.canvas.bind("<B1-Motion>", self.check_mouse_type)
+        self.alg_running = False
 
 
     def update_after_event(self, event):
         if event == "StartStop":
             top_menu.update_menu(event)
             self.removing = False
-            self.path = []
-            self.squares_searched = 0
             update_text((0,0))
             if not self.saved_data_reset:
                 self.delete_saved()
@@ -378,8 +394,6 @@ class Grid():
             self.removing = False
             self.canvas.config(cursor="arrow")
             top_menu.update_menu(event)
-            self.path = []
-            self.squares_searched = 0
             update_text((0,0))
             self.delete_saved()
 
@@ -388,8 +402,6 @@ class Grid():
 
         elif event == "Path Removed":
             top_menu.update_menu(event)
-            self.path = []
-            self.squares_searched = 0
             update_text((0,0))
 
     def update_saved(self, length, total, time):
@@ -446,8 +458,8 @@ class Menu_bar():
             self.radio_functions[cascade_label].append(attribute[1])
           
 
-    def update_menu(self, event):
-        if event == "StartStop":
+    def update_menu(self, event):           #NOt finding path did not really work properly(popup window early and time not working)
+        if event == "StartStop":            #Fix path with last three algorithms so they find quicker
             self.menu.entryconfig(1, label="Visualize Pathfinding!")
             self.menu.entryconfig(1, command=grid.call_path_algorithm)
 
@@ -475,8 +487,8 @@ class Square():
     def __init__(self, canvas, type, coords, side_length, center, animation_speed=7):
         self.canvas = canvas
         self.square_type = type
-        self.x = coords[0]
-        self.y = coords[1]
+        self.x = coords[1]
+        self.y = coords[0]
         self.center = center
         self.side_length = side_length
         self.radius = int((2*((side_length/2)**2))**(1/2))
@@ -521,38 +533,102 @@ def round_rectangle(x1, y1, x2, y2, radius=25, **kwargs):
     return grid.canvas.create_polygon(points, **kwargs, smooth=True)
 
 def update_squares():
+    for square in grid.animate_squares:
+        if square.square_type == 5:
+            color = gen_color(square.animation_stage, square.animation_step, square.final_color)
+        else:
+            color = colors[square.square_type-1]
+        a = square.side_length/2
+        if square.animation_stage == 1:
+            if square.animation_step <= 100:
+                grid.canvas.delete(square.rectangle)
+                diff_side = int(square.side_length/2 * square.animation_step/100)
+                diff_radius = int(square.radius * square.animation_step/100)
+                square.rectangle = round_rectangle(square.center[0]-diff_side+1, square.center[1]-diff_side+1, square.center[0]+diff_side, square.center[1]+diff_side, radius=diff_radius, fill=color)
+                square.animation_step += square.animation_speed
+            else:
+                square.animation_stage += 1
+                square.animation_step = 0
+                continue
+        elif square.animation_stage == 2:
+            if square.animation_step <= 100:
+                grid.canvas.delete(square.rectangle)
+                diff_radius = int(square.radius * (100-square.animation_step)/100)
+                square.rectangle = round_rectangle(square.center[0]-a+1, square.center[1]-a+1, square.center[0]+a, square.center[1]+a, radius=diff_radius, fill=color)
+                square.animation_step += square.animation_speed*2
+            else:
+                grid.canvas.delete(square.rectangle)
+                square.rectangle = grid.canvas.create_rectangle(square.center[0]-a, square.center[1]-a, square.center[0]+a, square.center[1]+a, fill=color)
+                grid.filled_squares[(square.y,square.x)] = square.rectangle
+                square.animation_stage += 1
+                square.animation_step = 0
+                continue
+        elif square.animation_stage == 3:
+            if square.animation_step <= 100:
+                grid.canvas.itemconfig(grid.filled_squares[(square.y,square.x)], fill=color)
+                square.animation_step += square.animation_speed
+            else:
+                grid.animate_squares.remove(square)
+        grid.filled_squares[(square.y,square.x)] = square.rectangle
+
+
+def gen_color(stage, step, close_to_start):
+    if stage == 1:
+        red = convert_to_hex(0)
+        green = convert_to_hex(int(70 + step/100 * 90))
+        blue = convert_to_hex(int(60 + step/100 * 195))
+    elif stage == 2:
+        red = convert_to_hex(int(130 * step/100))
+        green = convert_to_hex(160)
+        blue = convert_to_hex(int(255 - step/100 * 125))
+    elif stage == 3:
+        a = int(close_to_start*255) - 130               #idk
+        b = int(255 - close_to_start*170) - 160         #idk
+        red = convert_to_hex(int(130 + a * step/100))
+        green = convert_to_hex(int(160 + b * step/100))
+        blue = convert_to_hex(130)
+
+    return "#"+red+green+blue
+
+
+def convert_to_hex(num):
+    num = hex(num).split("x")[1]
+    if len(num) == 1:
+        return "0"+num
+    return num
+
+
+def check_grid():
     while grid.running:
-        if len(grid.animate_squares) > 0:
+        if len(grid.animate_squares) > 0 and not grid.alg_running:
             for square in grid.animate_squares:
+                temp = square.rectangle
                 a = square.side_length/2
                 if square.animation_stage == 1:
                     if square.animation_step <= 100:
-                        grid.canvas.delete(square.rectangle)
                         diff_side = int(square.side_length/2 * square.animation_step/100)
                         diff_radius = int(square.radius * square.animation_step/100)
                         square.rectangle = round_rectangle(square.center[0]-diff_side+1, square.center[1]-diff_side+1, square.center[0]+diff_side, square.center[1]+diff_side, radius=diff_radius, fill=colors[square.square_type-1])
+                        grid.canvas.delete(temp)
                         square.animation_step += square.animation_speed
                     else:
                         square.animation_stage += 1
                         continue
                 elif square.animation_stage == 2:
                     if square.animation_step >= 0:
-                        grid.canvas.delete(square.rectangle)
                         diff_radius = int(square.radius * square.animation_step/100)
                         square.rectangle = round_rectangle(square.center[0]-a+1, square.center[1]-a+1, square.center[0]+a, square.center[1]+a, radius=diff_radius, fill=colors[square.square_type-1])
+                        grid.canvas.delete(temp)
                         square.animation_step -= square.animation_speed*2
                     else:
-                        grid.canvas.delete(square.rectangle)
+                        temp = square.rectangle
                         square.rectangle = grid.canvas.create_rectangle(square.center[0]-a, square.center[1]-a, square.center[0]+a, square.center[1]+a, fill=colors[square.square_type-1])
+                        grid.canvas.delete(temp)
                         grid.animate_squares.remove(square)
-                grid.filled_squares[str(square.x)+","+str(square.y)] = square.rectangle
+                grid.filled_squares[(square.y, square.x)] = square.rectangle
         sleep(0.01)
-        
 
 root = tk.Tk()
-
-
-
 slidebar1_box = Frame(root)
 slidebar1_box.pack(fill=X)
 
@@ -568,8 +644,7 @@ box2 = Frame(rest)
 box2.grid(row=0,column=1, sticky="nswe")
 rest.columnconfigure(0, weight=2)
 rest.columnconfigure(1, weight=1)
-
-colors = ["black", "blue", "red", "yellow", "gray"]
+colors = ["black", "blue", "red", "yellow", "#667873"]
 grid = Grid(1200, 850, 50, colors)
 
 Label(slidebar1_box, text="Grid Size", width=20).pack(side="left")
@@ -600,12 +675,14 @@ top_menu = Menu_bar(buttons = [("Place Start and Stop", grid.chose_start_stop),
                     cascades = ["Path Finding Algorithms", "Maze/Pattern Algorithms"],
                     cascade_radios= {"Path Finding Algorithms": [("Dijkstra's Algorithm", (grid.current_path_algorithm, visualize_dijkstras_algorithm)),
                                                                  ("A*", (grid.current_path_algorithm, visualize_A_star)),
-                                                                 ("Greedy", (grid.current_path_algorithm, visualize_Greedy))],
+                                                                 ("Greedy", (grid.current_path_algorithm, visualize_Greedy)),
+                                                                 ("Depth-first", (grid.current_path_algorithm, depth_first)),
+                                                                 ("Breadth-first", (grid.current_path_algorithm, breadth_first))],
 
                                       "Maze/Pattern Algorithms": [("Recursive Division", (grid.current_maze_algorithm, recursive_division)),
                                                                   ("Scatter", (grid.current_maze_algorithm, scatter)),
                                                                   ("To Be Created", (grid.current_maze_algorithm, grid.clear_grid))]})
-time_algorithms = [djikstra_time, A_star_time, Greedy_time]
+time_algorithms = [djikstra_time, A_star_time, Greedy_time, depth_first_time, breadth_first_time]
 
 def upd_inst_alg_label():
     if grid.instant_algorithms.get():
@@ -652,5 +729,4 @@ instant_alg_label.pack(side="top")
 top_menu.menu.entryconfig(5, state=DISABLED)
 root.config(menu=top_menu.menu)
 
-Thread(target=update_squares).start()
 root.mainloop()
