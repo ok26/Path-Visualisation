@@ -12,13 +12,10 @@ def recursive_division(grid, maze_ratio=(-1,1), first=1):
    
     if len(grid) == 0:
             return grid
-    try:
-        grid_width = len(grid[0])
-        grid_height = len(grid)
-    except:
-        print(grid, len(grid))
+    grid_width = len(grid[0])
+    grid_height = len(grid)
 
-    if grid_width == 0:   #Because bug with empty array thats actually not empty
+    if grid_width == 0:   #Because bug with empty array thats actually not empty, or idk
         return grid
 
     while True:
@@ -91,12 +88,12 @@ def fix_maze_bug(grid_obj):
                 if len(check) == 3:
                    for i in range(3):
                         if i != 1 and grid_obj.np_grid[y,x-1+i] == 0:
-                            grid_obj.fill_square_without_animation(x,y)
-                            grid_obj.remove_square(x,y-1)
+                            grid_obj.fill_square_without_animation((y,x), "black")
+                            grid_obj.remove_square((y-1,x))
                             break
                         if i != 1 and grid_obj.np_grid[y-1+i,x] == 0:
-                            grid_obj.fill_square_without_animation(x,y)
-                            grid_obj.remove_square(x-1,y)
+                            grid_obj.fill_square_without_animation((y,x), "black")
+                            grid_obj.remove_square((y,x-1))
                             break
                 else:
                     total_y = 0
@@ -125,11 +122,11 @@ def fix_maze_bug(grid_obj):
                         i += 1
 
                     if total_y >= total_x:
-                        grid_obj.fill_square_without_animation(x,y)
-                        grid_obj.remove_square(x,y-1)
+                        grid_obj.fill_square_without_animation((y,x), "black")
+                        grid_obj.remove_square((y-1,x))
                     else:
-                        grid_obj.fill_square_without_animation(x,y)
-                        grid_obj.remove_square(x-1,y)
+                        grid_obj.fill_square_without_animation((y,x), "black")
+                        grid_obj.remove_square((y,x-1))
 
 
 def scatter(grid):
